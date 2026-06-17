@@ -118,7 +118,21 @@
     servidor/.style={rectangle, draw=uncblue, very thick, fill=blue!10, rounded corners,
                      minimum width=3.2cm, minimum height=1.1cm, text centered, align=center, font=\small\bfseries},
     flecha/.style={-Stealth, thick, gray!70!black},
-    flechabi/.style={Stealth-Stealth, thick, uncblue}
+    flechabi/.style={Stealth-Stealth, thick, uncblue},
+    % -- Automata de estados --
+    estado/.style={circle, draw=uncblue, very thick, fill=blue!8,
+                   minimum size=1.9cm, text centered, align=center, font=\scriptsize},
+    estadofin/.style={circle, draw=uncblue, very thick, fill=blue!8,
+                      double, double distance=1.2pt,
+                      minimum size=1.9cm, text centered, align=center, font=\scriptsize},
+    % -- Diagrama de despliegue / componentes --
+    nodo/.style={rectangle, draw=uncblue, very thick, rounded corners,
+                 inner sep=10pt, font=\small\bfseries},
+    comp/.style={rectangle, draw=uncblue!70, thick, fill=blue!5, rounded corners,
+                 minimum width=2.8cm, minimum height=0.7cm, text centered, align=center, font=\scriptsize},
+    % -- Carriles (swimlanes) --
+    carril/.style={rectangle, draw=uncblue!60, thick, fill=blue!4, rounded corners,
+                   minimum width=2.4cm, minimum height=0.75cm, text centered, align=center, font=\scriptsize}
 }
 
 % ============================================================
@@ -235,7 +249,7 @@ El \textit{back-end} se construye sobre \textbf{Node.js}, un entorno de ejecuci�
 
 \subsection{Arquitectura general}
 
-La aplicación sigue una arquitectura cliente--servidor con un único servidor central y múltiples clientes (navegadores). El servidor cumple dos funciones: entrega los archivos estáticos (HTTP, una sola vez al cargar la página) y mantiene el canal de tiempo real (WebSocket) por el que empuja los datos. La Figura~\ref{fig:arq} muestra el esquema.
+La aplicación sigue una arquitectura cliente--servidor con un único servidor central y múltiples clientes (navegadores). El servidor cumple dos funciones: entrega los archivos estáticos (HTTP, una sola vez al cargar la página) y mantiene el canal de tiempo real (WebSocket) por el que empuja los datos. La Figura~\ref{fig:arq} muestra el esquema lógico.
 
 \begin{figure}[H]
 \centering
@@ -251,6 +265,44 @@ La aplicación sigue una arquitectura cliente--servidor con un único servidor c
 \end{tikzpicture}
 \caption{Arquitectura bidireccional: un servidor central empuja eventos a todos los clientes conectados a través de WebSocket.}
 \label{fig:arq}
+\end{figure}
+
+\subsection{Distribución y despliegue}
+\label{sec:despliegue}
+
+Al tratarse de un sistema \textbf{distribuido}, conviene precisar qué piezas de software se ejecutan en cada nodo físico y qué tecnología comunica esos nodos. La aplicación se reparte en dos tipos de nodos de cómputo que se comunican únicamente por la red:
+
+\begin{itemize}[leftmargin=1.4em]
+    \item \textbf{Nodo Servidor} (una sola instancia): una máquina que ejecuta el proceso de \textbf{Node.js}. Dentro de ese proceso conviven el \textit{framework} \textbf{Express} (que sirve los archivos estáticos por HTTP) y el servidor de \textbf{Socket.io} (que mantiene el estado en memoria —el \texttt{Map} de usuarios— y los temporizadores de reloj y anuncios). Es el único componente con estado compartido y autoridad sobre lo que se difunde.
+    \item \textbf{Nodo Cliente} (una o varias instancias): cada computadora que abre la aplicación en un \textbf{navegador}. Allí se ejecutan el \texttt{index.html}, los estilos y, sobre todo, el \texttt{cliente.js} con la lógica reactiva de \textbf{RxJS}. Cada navegador mantiene su propia copia local del estado visible (el historial acumulado con \texttt{scan}).
+\end{itemize}
+
+La separación es relevante porque los nodos \textbf{no comparten memoria}: la única forma de coordinarse es el intercambio de mensajes (eventos de Socket.io) sobre el canal WebSocket. La Figura~\ref{fig:despliegue} muestra el diagrama de despliegue, identificando qué se ejecuta en cada nodo y el límite de red que los separa.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+    % --- Nodo Servidor ---
+    \node[comp] (express) {Express\\\scriptsize (archivos estáticos)};
+    \node[comp, below=0.4cm of express] (sio) {Servidor Socket.io\\\scriptsize (eventos + estado)};
+    \node[comp, below=0.4cm of sio] (estado) {Estado en memoria\\\scriptsize Map socket.id\,$\to$\,nombre};
+    \node[nodo, fit=(express)(sio)(estado), label={[font=\small\bfseries,text=uncblue]above:Nodo Servidor (Node.js)}] (servnode) {};
+
+    % --- Nodos Cliente ---
+    \node[comp, right=4.2cm of express] (dom1) {DOM / index.html};
+    \node[comp, below=0.4cm of dom1] (rx1) {cliente.js + RxJS};
+    \node[nodo, fit=(dom1)(rx1), label={[font=\small\bfseries,text=uncblue]above:Nodo Cliente 1 (navegador)}] (cli1) {};
+
+    \node[comp, below=2.2cm of rx1] (dom2) {DOM / index.html};
+    \node[comp, below=0.4cm of dom2] (rx2) {cliente.js + RxJS};
+    \node[nodo, fit=(dom2)(rx2), label={[font=\small\bfseries,text=uncblue]above:Nodo Cliente 2 (navegador)}] (cli2) {};
+
+    % --- Comunicacion ---
+    \draw[flechabi] (servnode.east|-cli1) -- node[above, font=\scriptsize, align=center]{WebSocket\\\scriptsize (Socket.io)} (cli1.west);
+    \draw[flechabi] (servnode.east|-cli2) -- node[below, font=\scriptsize, align=center]{WebSocket\\\scriptsize (Socket.io)} (cli2.west);
+\end{tikzpicture}
+\caption{Diagrama de despliegue: software que corre en cada nodo (servidor y clientes) y el límite de red que los separa. Los nodos no comparten memoria; solo intercambian mensajes por WebSocket.}
+\label{fig:despliegue}
 \end{figure}
 
 \subsection{Niveles implementados}
@@ -282,171 +334,256 @@ El proyecto se organiza en un \textit{back-end} (un único archivo) y un \textit
     \item \texttt{public/index.html} — estructura de la interfaz (login + chat).
     \item \texttt{public/cliente.js} — lógica del cliente con RxJS.
     \item \texttt{public/styles.css} — estilos (estética institucional UNCOMA).
-    \item \texttt{package.json} — dependencias (\texttt{express}, \texttt{socket.io}).
+    \item \texttt{package.json} — dependencias (\texttt{express}, \texttt{socket.io}, \texttt{dotenv}).
+    \item \texttt{.env} — configuración local (puerto); \emph{no} se versiona.
+    \item \texttt{.env.example} — plantilla de configuración que sí se versiona.
 \end{itemize}
 
-\subsection{Back-end: \texttt{server.js}}
+\subsection{Configuración: sin valores fijos en el código}
+\label{sec:config}
 
-\subsubsection{Reloj y anuncios (push periódico)}
+Una buena práctica de diseño es \textbf{no ``clavar'' (hardcodear) en el código} valores que dependen del entorno donde corre la aplicación, como puertos o direcciones. Esto sigue el principio de configuración de las \textit{12-factor apps}: \emph{el mismo código} debe poder ejecutarse en cualquier máquina cambiando únicamente su configuración externa. En el proyecto se aplicó este criterio en dos puntos:
 
-Las dos funcionalidades más simples se resuelven con temporizadores que difunden a todos los clientes. El reloj emite la hora una vez por segundo; los anuncios rotan sobre un arreglo cada cinco segundos. El siguiente fragmento muestra el mecanismo (Listado~\ref{lst:reloj}).
+\begin{itemize}[leftmargin=1.4em]
+    \item \textbf{El puerto del servidor} no está escrito de forma fija. Se lee desde una \textbf{variable de entorno} (\texttt{PORT}) mediante la biblioteca \texttt{dotenv}, que al iniciar carga el contenido del archivo \texttt{.env} dentro de \texttt{process.env}. El servidor toma ese valor para ponerse a escuchar y, si la variable no está definida, recurre a un valor por defecto (\texttt{3000}) usado solo como respaldo. Para cambiar el puerto basta con editar el archivo \texttt{.env} (por ejemplo \texttt{PORT=4000}), \emph{sin tocar el código fuente}.
+    \item \textbf{La dirección del servidor (IP) tampoco está hardcodeada en el cliente.} En \texttt{cliente.js} la conexión se abre con \texttt{io()} \emph{sin argumentos}, por lo que Socket.io toma automáticamente el mismo host y puerto que sirvieron la página. De este modo, la aplicación funciona igual en \texttt{localhost} o accedida por IP desde otra computadora de la red, sin cambiar una sola línea.
+\end{itemize}
 
-\begin{lstlisting}[language=JavaScript, caption={Reloj y bloque de anuncios: el servidor empuja datos por intervalos.}, label={lst:reloj}]
-// Reloj global: la hora se empuja a todos cada segundo
-setInterval(() => {
-    io.emit('hora', ahora());
-}, 1000);
+Además, el archivo \texttt{.env} se excluye del control de versiones (vía \texttt{.gitignore}) y en su lugar se versiona un \texttt{.env.example} a modo de plantilla. Así se documenta qué variables existen sin exponer la configuración concreta de cada máquina (una práctica esencial cuando, en proyectos reales, esos archivos contienen credenciales o claves).
 
-// Bloque de anuncios: rota sobre un arreglo cada 5 segundos
-const anuncios = [
-    'Bienvenidos al Laboratorio de Programacion Distribuida',
-    'El servidor empuja los datos al cliente (push), sin refrescar',
-    'Comunicacion bidireccional con Socket.io + RxJS',
-    'Facultad de Informatica - UNCOMA',
-];
-let indiceAnuncio = 0;
-setInterval(() => {
-    io.emit('anuncio', anuncios[indiceAnuncio]);
-    indiceAnuncio = (indiceAnuncio + 1) % anuncios.length;
-}, 5000);
+\subsection{Cómo ejecutar el proyecto}
+\label{sec:ejecucion}
+
+\paragraph{Requisitos.} Tener instalado \textbf{Node.js} (que incluye \texttt{npm}). No se requiere base de datos ni ningún otro servicio.
+
+\paragraph{Pasos.}
+\begin{enumerate}[leftmargin=1.6em]
+    \item \textbf{Instalar las dependencias} (lee \texttt{package.json} y descarga Express, Socket.io y dotenv):
+\begin{lstlisting}[language=bash]
+npm install
+\end{lstlisting}
+    \item \textbf{Configurar el entorno}: copiar la plantilla a un archivo \texttt{.env} y, si se desea, ajustar el puerto:
+\begin{lstlisting}[language=bash]
+copy .env.example .env      # en Windows
+# cp  .env.example .env     # en Linux / macOS
+\end{lstlisting}
+    \item \textbf{Iniciar el servidor}:
+\begin{lstlisting}[language=bash]
+node server.js
+# Consola: "Servidor escuchando en puerto 3000"
+\end{lstlisting}
+    \item \textbf{Abrir el cliente} en el navegador:
+    \begin{itemize}[leftmargin=1.4em]
+        \item En la misma computadora: \url{http://localhost:3000}
+        \item Desde otra computadora de la red: \texttt{http://<IP-del-servidor>:3000} (la IP local se obtiene con \texttt{ipconfig} en Windows o \texttt{ip addr} en Linux). Puede ser necesario habilitar el puerto en el \textit{firewall}.
+    \end{itemize}
+    \item \textbf{Probar el tiempo real}: abrir la dirección en dos pestañas o dos computadoras distintas, ingresar con nombres diferentes y comprobar que los mensajes, la lista de usuarios, el reloj y los anuncios se sincronizan automáticamente, sin recargar la página.
+\end{enumerate}
+
+\subsection{Especificación del comportamiento}
+\label{sec:especificacion}
+
+Esta sección describe \emph{qué} hace cada extremo del sistema con independencia de cómo está escrito el código fuente (que se entrega por separado). Para ello se usa \textbf{pseudocódigo} —una notación cercana al lenguaje natural— que documenta la lógica de forma que pueda leerse, corregirse o reimplementarse en otro lenguaje.
+
+\subsubsection{Servidor}
+
+El servidor combina dos comportamientos: tareas \textbf{periódicas} que empujan datos a todos (reloj y anuncios) y la \textbf{reacción a eventos} provenientes de cada cliente (registro, mensaje, desconexión). Mantiene una única estructura de estado compartido: una tabla que asocia el identificador único de cada conexión (\texttt{socket.id}) con el nombre del usuario. El Pseudocódigo~\ref{alg:servidor} resume su comportamiento.
+
+\begin{lstlisting}[caption={Pseudocódigo del comportamiento del servidor.}, label={alg:servidor}]
+ESTADO GLOBAL:
+    usuarios <- tabla vacia (clave: socket.id, valor: nombre)
+    anuncios <- lista fija de textos
+    indiceAnuncio <- 0
+
+TAREA PERIODICA cada 1 segundo:
+    difundir a TODOS el evento "hora" con la hora actual
+
+TAREA PERIODICA cada 5 segundos:
+    difundir a TODOS el evento "anuncio" con anuncios[indiceAnuncio]
+    avanzar indiceAnuncio de forma circular
+
+AL CONECTARSE un cliente (nueva conexion "socket"):
+
+    AL RECIBIR "registrarUsuario" con un nombre:
+        limpio <- recortar espacios del nombre
+        SI limpio esta vacio: ignorar y terminar
+        usuarios[socket.id] <- limpio
+        enviar SOLO a este socket el evento "usuarioRegistrado"
+        enviar SOLO a este socket el "anuncio" vigente
+        difundir a TODOS "mensajeSistema": (limpio + " se ha conectado")
+        difundir a TODOS "usuarios" con la lista de nombres
+
+    AL RECIBIR "mensaje" con un objeto {texto}:
+        nombre <- usuarios[socket.id]
+        SI nombre no existe: ignorar (cliente no registrado)
+        t <- recortar espacios de texto
+        SI t esta vacio: ignorar y terminar
+        difundir a TODOS "mensaje" con {usuario: nombre, texto: t, hora: actual}
+
+    AL DESCONECTARSE el socket:
+        nombre <- usuarios[socket.id]
+        SI nombre no existe: terminar (nunca se registro)
+        eliminar usuarios[socket.id]
+        difundir a TODOS "mensajeSistema": (nombre + " se ha desconectado")
+        difundir a TODOS "usuarios" con la lista de nombres
 \end{lstlisting}
 
-\subsubsection{Gestión de usuarios y chat}
+Conviene destacar dos decisiones de diseño. Primero, el estado se indexa por \texttt{socket.id} y no por nombre: como el identificador de conexión es único, dos usuarios con el mismo nombre no se interfieren al desconectarse. Segundo, toda validación se hace \emph{también} en el servidor (nombres y textos vacíos se descartan), sin confiar en que el cliente lo haya hecho.
 
-Cada cliente, al conectarse, abre un \texttt{socket}. La aplicación mantiene un \texttt{Map} que asocia el identificador único de cada conexión (\texttt{socket.id}) con el nombre elegido. Trackear por \texttt{socket.id} —y no por nombre— evita un error sutil: si dos personas eligen el mismo nombre, al desconectarse una no se elimina la entrada equivocada. El Listado~\ref{lst:chat} resume el ciclo de vida de una conexión.
+\subsubsection{Cliente (\textit{pipeline} reactivo)}
 
-\begin{lstlisting}[language=JavaScript, caption={Registro de usuario, reenvío de mensajes y desconexión.}, label={lst:chat}]
-const usuarios = new Map(); // socket.id -> nombre
+El cliente no usa variables sueltas ni \textit{callbacks} dispersos: modela cada entrada —eventos del DOM y eventos del \texttt{socket}— como un \textbf{flujo de datos} (Observable) y construye la interfaz suscribiéndose a esos flujos. El Pseudocódigo~\ref{alg:cliente} describe los tres \textit{pipelines} principales con una notación reactiva: \textsc{desde}(fuente) crea un flujo, \textsc{fusionar} combina flujos (\textit{merge}), \textsc{mapear}/\textsc{filtrar}/\textsc{acumular} son las transformaciones (\textit{map}/\textit{filter}/\textit{scan}) y \textsc{suscribir} define la reacción final.
 
-io.on('connection', (socket) => {
+\begin{lstlisting}[caption={Pseudocódigo del comportamiento reactivo del cliente.}, label={alg:cliente}]
+// --- Pipeline 1: ingreso del usuario ---
+clic$  <- DESDE(boton "Entrar", evento clic)
+enter$ <- DESDE(campo nombre, tecla) |> FILTRAR(tecla = Enter)
 
-    socket.on('registrarUsuario', (nombre) => {
-        const limpio = String(nombre || '').trim();
-        if (limpio === '') return;            // validacion en el servidor
-        usuarios.set(socket.id, limpio);
-        socket.emit('usuarioRegistrado');     // confirma solo a ese cliente
-        socket.emit('anuncio', anuncios[indiceAnuncio]); // anuncio actual
-        io.emit('mensajeSistema', `${limpio} se ha conectado`);
-        io.emit('usuarios', Array.from(usuarios.values()));
-    });
+FUSIONAR(clic$, enter$)
+    |> MAPEAR(=> texto actual del campo nombre, sin espacios)
+    |> FILTRAR(nombre distinto de vacio)
+    |> SUSCRIBIR(nombre => enviar al servidor "registrarUsuario"(nombre))
 
-    socket.on('mensaje', (datos) => {
-        const nombre = usuarios.get(socket.id);
-        if (!nombre) return;                  // solo usuarios registrados
-        const texto = String((datos && datos.texto) || '').trim();
-        if (texto === '') return;
-        io.emit('mensaje', { usuario: nombre, texto, hora: ahora() });
-    });
+DESDE(socket, "usuarioRegistrado")
+    |> SUSCRIBIR(=> ocultar login y mostrar el chat)
 
-    socket.on('disconnect', () => {
-        const nombre = usuarios.get(socket.id);
-        if (!nombre) return;
-        usuarios.delete(socket.id);
-        io.emit('mensajeSistema', `${nombre} se ha desconectado`);
-        io.emit('usuarios', Array.from(usuarios.values()));
-    });
-});
+// --- Pipeline 2: datos en vivo (reloj, anuncios, usuarios) ---
+DESDE(socket, "hora")     |> SUSCRIBIR(h => pintar la hora)
+DESDE(socket, "anuncio")  |> SUSCRIBIR(a => pintar el anuncio)
+DESDE(socket, "usuarios") |> SUSCRIBIR(lista => redibujar conectados)
+
+// --- Pipeline 3: historial de mensajes como estado ---
+chat$    <- DESDE(socket, "mensaje")       |> MAPEAR(d => {tipo:usuario, ...d})
+sistema$ <- DESDE(socket, "mensajeSistema")|> MAPEAR(t => {tipo:sistema, texto:t})
+
+FUSIONAR(chat$, sistema$)
+    |> ACUMULAR((historial, msg) => historial + [msg], inicial = [])
+    |> SUSCRIBIR(historial => redibujar la lista y hacer auto-scroll)
 \end{lstlisting}
 
-\subsubsection{Protocolo de eventos}
+El \textit{pipeline} 3 es el más representativo del paradigma: el historial del chat no se guarda en una variable mutable sino que es el resultado de \textsc{acumular} (\textit{scan}) sobre el flujo combinado de mensajes; cada mensaje nuevo produce un historial actualizado al que la vista simplemente reacciona.
 
-El contrato entre cliente y servidor se reduce a un conjunto acotado de eventos con nombre. La Tabla~\ref{tab:eventos} documenta cada uno, su sentido y su contenido.
+\subsection{Autómata de estados del cliente}
+\label{sec:automata}
+
+Desde el punto de vista del usuario, el cliente es una pequeña \textbf{máquina de estados} con tres situaciones bien diferenciadas. La Figura~\ref{fig:automata} la representa: las transiciones se etiquetan con el evento que las provoca.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=3.2cm]
+    \node[estado] (login) {\textbf{LOGIN}\\\scriptsize formulario\\de ingreso};
+    \node[estado, right=of login] (reg) {\textbf{REGISTRADO}\\\scriptsize chat activo};
+
+    \coordinate[left=1.1cm of login] (start);
+    \draw[flecha] (start) -- (login);
+
+    \draw[flecha] (login) to[bend left=25]
+        node[above, font=\scriptsize, align=center]{nombre válido /\\\texttt{emit(registrarUsuario)}} (reg);
+    \draw[flecha] (reg) to[bend left=25]
+        node[below, font=\scriptsize, align=center]{\texttt{disconnect} /\\reconexión} (login);
+
+    % loops
+    \draw[flecha] (login) to[loop above]
+        node[above, font=\scriptsize, align=center]{nombre vacío\\(se descarta)} (login);
+    \draw[flecha] (reg) to[loop above]
+        node[above, font=\scriptsize, align=center]{\texttt{hora}, \texttt{anuncio},\\\texttt{usuarios}, \texttt{mensaje}\\(actualizan vista)} (reg);
+\end{tikzpicture}
+\caption{Autómata de estados del cliente. El estado inicial es LOGIN; un nombre válido lleva a REGISTRADO; los eventos en vivo solo actualizan la vista sin cambiar de estado; una desconexión vuelve a LOGIN.}
+\label{fig:automata}
+\end{figure}
+
+\begin{itemize}[leftmargin=1.4em]
+    \item \textbf{LOGIN} (inicial): se muestra el formulario. Un nombre vacío se descarta (transición sobre sí mismo); un nombre válido emite \texttt{registrarUsuario} y, al confirmar el servidor, se pasa a \textsc{Registrado}.
+    \item \textbf{REGISTRADO}: el chat está activo. Los eventos \texttt{hora}, \texttt{anuncio}, \texttt{usuarios}, \texttt{mensaje} y \texttt{mensajeSistema} actualizan la interfaz pero no cambian el estado.
+    \item \textbf{Transición de salida}: una desconexión (\texttt{disconnect}) deja sin efecto el registro; al reconectar, el cliente vuelve a partir de \textsc{Login}.
+\end{itemize}
+
+\subsection{Especificación del protocolo de mensajes}
+\label{sec:protocolo}
+
+El contrato entre nodos es un conjunto acotado de \textbf{eventos con nombre} de Socket.io. Cada evento tiene un \textbf{nombre}, una \textbf{dirección}, un \textbf{tipo de dato} y un \textbf{formato} preciso para su \textit{payload}. El \textbf{transporte} es común a todos: WebSocket (con \textit{fallback} a \textit{HTTP long-polling} que gestiona Socket.io), y la serialización del \textit{payload} la realiza Socket.io (formato JSON para objetos). La Tabla~\ref{tab:protocolo} especifica cada mensaje.
 
 \begin{table}[H]
 \centering
-\caption{Protocolo de eventos de Socket.io de la aplicación.}
-\label{tab:eventos}
+\caption{Especificación del protocolo: tipos y formatos de cada mensaje.}
+\label{tab:protocolo}
 \renewcommand{\arraystretch}{1.35}
-\begin{tabular}{@{}>{\ttfamily\raggedright\arraybackslash}p{3cm} >{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}p{7cm}@{}}
+\begin{tabular}{@{}>{\ttfamily\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}p{2.5cm} >{\raggedright\arraybackslash}p{2.1cm} >{\raggedright\arraybackslash}p{5.3cm}@{}}
 \toprule
-\textbf{\normalfont Evento} & \textbf{Sentido} & \textbf{Datos / Significado} \\
+\textbf{\normalfont Mensaje} & \textbf{Dirección} & \textbf{Tipo} & \textbf{Formato / Disparador} \\
 \midrule
-registrarUsuario & Cliente $\rightarrow$ Servidor & Nombre elegido; solicita el alta. \\
-usuarioRegistrado & Servidor $\rightarrow$ Cliente & Confirmación al solicitante; habilita el chat. \\
-hora & Servidor $\rightarrow$ Todos & Cadena con la hora actual (cada 1~s). \\
-anuncio & Servidor $\rightarrow$ Todos & Texto del anuncio vigente (cada 5~s). \\
-mensaje & Ambos sentidos & Cliente envía \texttt{\{texto\}}; servidor difunde \texttt{\{usuario, texto, hora\}}. \\
-mensajeSistema & Servidor $\rightarrow$ Todos & Avisos de conexión/desconexión. \\
-usuarios & Servidor $\rightarrow$ Todos & Lista actualizada de nombres conectados. \\
+registrarUsuario & Cliente $\rightarrow$ Servidor & \texttt{string} & Nombre elegido. Disparo: alta del usuario. \\
+usuarioRegistrado & Servidor $\rightarrow$ 1 Cliente & \textit{(vacío)} & Sin \textit{payload}. Confirma el alta al solicitante. \\
+hora & Servidor $\rightarrow$ Todos & \texttt{string} & Hora \texttt{"HH:MM:SS"}. Periódico (cada 1~s). \\
+anuncio & Servidor $\rightarrow$ Todos / 1 & \texttt{string} & Texto del anuncio. Periódico (5~s) o al registrarse. \\
+mensaje (envío) & Cliente $\rightarrow$ Servidor & \texttt{object} & \texttt{\{ texto: string \}}. Disparo: el usuario envía. \\
+mensaje (difusión) & Servidor $\rightarrow$ Todos & \texttt{object} & \texttt{\{ usuario: string, texto: string, hora: string \}}. \\
+mensajeSistema & Servidor $\rightarrow$ Todos & \texttt{string} & Aviso de conexión/desconexión. \\
+usuarios & Servidor $\rightarrow$ Todos & \texttt{string[]} & Arreglo de nombres conectados. \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Front-end reactivo: \texttt{cliente.js}}
+A modo de especificación formal del formato, los dos mensajes con estructura compuesta (evento \texttt{mensaje}) responden a los siguientes esquemas:
 
-El cliente es donde se concentra la \textbf{programación reactiva}. La idea rectora es que \emph{cada} entrada —tanto los eventos del DOM como los del \texttt{socket}— se modela como un Observable, y la interfaz se actualiza suscribiéndose a esos flujos.
+\begin{lstlisting}[caption={Esquemas del \textit{payload} del evento \texttt{mensaje} (envío y difusión).}, label={alg:esquema}]
+// Cliente -> Servidor  (lo que el usuario escribe)
+mensaje_envio = {
+    texto: string        // obligatorio, no vacio tras recortar espacios
+}
 
-\subsubsection{Ingreso del usuario (combinación de flujos)}
-
-El alta puede dispararse de dos maneras: con un clic en ``Entrar'' o presionando Enter en el campo de nombre. Con RxJS, ambas fuentes se unifican en un solo flujo mediante \texttt{merge}, se extrae el nombre con \texttt{map} y se descartan los vacíos con \texttt{filter} (Listado~\ref{lst:login}). El diagrama de flujo de este proceso se muestra en la Figura~\ref{fig:flujo}.
-
-\begin{lstlisting}[language=JavaScript, caption={Ingreso del usuario combinando clic y Enter en un único flujo reactivo.}, label={lst:login}]
-const clickIngresar$ = fromEvent(btnIngresar, 'click');
-const enterNombre$   = fromEvent(txtNombre, 'keydown').pipe(filter(esEnter));
-
-merge(clickIngresar$, enterNombre$).pipe(
-    map(() => txtNombre.value.trim()),
-    filter((nombre) => nombre !== '')
-).subscribe((nombre) => {
-    socket.emit('registrarUsuario', nombre);
-});
-
-// El servidor confirma -> se muestra el chat
-fromEvent(socket, 'usuarioRegistrado').subscribe(() => {
-    login.style.display = 'none';
-    chat.style.display  = 'block';
-});
+// Servidor -> Todos  (el servidor completa autor y hora)
+mensaje_difusion = {
+    usuario: string,     // nombre registrado del emisor
+    texto:   string,     // texto ya validado
+    hora:    string      // formato "HH:MM:SS"
+}
 \end{lstlisting}
+
+Obsérvese una característica de diseño del protocolo: el cliente solo aporta el \texttt{texto}; es el \textbf{servidor} quien agrega el \texttt{usuario} (a partir del \texttt{socket.id}) y la \texttt{hora}. Así, un cliente no puede falsear el autor de un mensaje ni su marca temporal.
+
+\subsection{Flujo del ingreso de un usuario}
+
+El ingreso es el intercambio más representativo entre los dos nodos. La Figura~\ref{fig:flujo} lo presenta con \textbf{carriles} (\textit{swimlanes}) que separan explícitamente qué hace el \textbf{Cliente} y qué hace el \textbf{Servidor}, evidenciando el cruce de red en cada flecha horizontal.
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[node distance=0.95cm and 1.4cm]
-    \node[inicio] (ini) {Inicio};
-    \node[caja, below=of ini] (ingresa) {Clic ``Entrar'' \emph{o} Enter};
-    \node[decision, below=of ingresa] (vacio) {¿Nombre\\vacío?};
-    \node[caja, below=1.4cm of vacio] (emit) {\texttt{emit('registrarUsuario')}};
-    \node[caja, below=of emit] (reg) {Servidor: \texttt{usuarios.set(id,nombre)}};
-    \node[caja, below=of reg] (conf) {Servidor: \texttt{emit('usuarioRegistrado')}};
-    \node[caja, below=of conf] (mostrar) {Oculta login, muestra chat};
-    \node[inicio, below=of mostrar] (fin) {Fin};
+\begin{tikzpicture}[node distance=0.8cm]
+    % --- Encabezados de carril ---
+    \node[font=\small\bfseries, text=uncblue] (hc) at (0,0) {CLIENTE};
+    \node[font=\small\bfseries, text=uncblue] (hs) at (7,0) {SERVIDOR};
+    % linea divisoria
+    \draw[uncblue!40, dashed, thick] (3.5,0.4) -- (3.5,-9.2);
 
-    \draw[flecha] (ini) -- (ingresa);
-    \draw[flecha] (ingresa) -- (vacio);
-    \draw[flecha] (vacio) -- node[right, font=\scriptsize]{No} (emit);
-    \draw[flecha] (vacio.east) -- ++(2.6,0) |- node[pos=0.25, right, font=\scriptsize]{Sí (descarta)} (ingresa.east);
-    \draw[flecha] (emit) -- (reg);
-    \draw[flecha] (reg) -- (conf);
-    \draw[flecha] (conf) -- (mostrar);
-    \draw[flecha] (mostrar) -- (fin);
+    % --- Carril Cliente ---
+    \node[carril, below=0.5cm of hc] (c1) {Clic ``Entrar'' o Enter};
+    \node[decision, below=of c1] (c2) {¿Nombre\\vacío?};
+    \node[carril, below=1.2cm of c2] (c3) {\texttt{emit(registrarUsuario)}};
+    \node[carril, below=3.0cm of c3] (c4) {Oculta login,\\muestra chat};
+
+    % --- Carril Servidor ---
+    \node[carril] (s1) at (7,-4.0) {\texttt{usuarios.set(id, nombre)}};
+    \node[carril, below=of s1] (s2) {\texttt{emit(usuarioRegistrado)}};
+    \node[carril, below=of s2] (s3) {difunde \texttt{usuarios}\\y \texttt{mensajeSistema}};
+
+    % --- Flechas internas cliente ---
+    \draw[flecha] (c1) -- (c2);
+    \draw[flecha] (c2) -- node[right, font=\scriptsize]{No} (c3);
+    \draw[flecha] (c2.west) -- ++(-1.5,0) |- node[pos=0.25, left, font=\scriptsize]{Sí (descarta)} (c1.west);
+
+    % --- Cruces de red ---
+    \draw[flecha, uncblue] (c3.east) -- node[above, font=\scriptsize, sloped]{red} (s1.west);
+    \draw[flecha, uncblue] (s2.west) -- node[above, font=\scriptsize, sloped]{red} (c4.east);
+    \draw[flecha] (s1) -- (s2);
+    \draw[flecha] (s2) -- (s3);
 \end{tikzpicture}
-\caption{Diagrama de flujo del ingreso de un usuario al chat.}
+\caption{Flujo del ingreso con carriles Cliente\,$\mid$\,Servidor. Cada flecha horizontal (en azul) atraviesa la red; el resto son pasos locales de cada nodo.}
 \label{fig:flujo}
 \end{figure}
 
-\subsubsection{Recepción de mensajes como estado reactivo (\texttt{scan})}
+\subsection{Recorrido completo de un mensaje}
 
-El punto más representativo del paradigma es el manejo del historial de mensajes. En lugar de ir agregando elementos al DOM con cada evento suelto, se \emph{combinan} dos flujos —mensajes de usuarios y mensajes del sistema— y se \emph{acumulan} con \texttt{scan}, que mantiene el historial completo como un único valor que se vuelve a emitir en cada mensaje nuevo (Listado~\ref{lst:scan}). La interfaz solo se suscribe a ese estado y se redibuja.
-
-\begin{lstlisting}[language=JavaScript, caption={Historial de mensajes acumulado con scan: el estado del chat es un flujo.}, label={lst:scan}]
-const mensajeChat$ = fromEvent(socket, 'mensaje').pipe(
-    map((d) => ({ tipo: 'usuario', usuario: d.usuario, texto: d.texto, hora: d.hora }))
-);
-const mensajeSistema$ = fromEvent(socket, 'mensajeSistema').pipe(
-    map((texto) => ({ tipo: 'sistema', texto }))
-);
-
-merge(mensajeChat$, mensajeSistema$).pipe(
-    scan((historial, msg) => [...historial, msg], [])
-).subscribe((historial) => {
-    listaMensajes.innerHTML = '';
-    historial.forEach((m) => { /* crea un <li> por mensaje */ });
-    listaMensajes.scrollTop = listaMensajes.scrollHeight; // auto-scroll
-});
-\end{lstlisting}
-
-\subsubsection{Esquema del flujo de datos reactivo}
-
-La Figura~\ref{fig:streams} ilustra cómo los eventos del \texttt{socket} se convierten en Observables, se combinan, se acumulan y terminan actualizando la vista.
+El historial del chat en el cliente se construye combinando dos flujos (mensajes de usuarios y del sistema) y acumulándolos con \texttt{scan}, de modo que el estado del chat \emph{es} un flujo de datos. La Figura~\ref{fig:streams} ilustra cómo los eventos del \texttt{socket} se convierten en Observables, se combinan, se acumulan y terminan actualizando la vista.
 
 \begin{figure}[H]
 \centering
@@ -466,8 +603,6 @@ La Figura~\ref{fig:streams} ilustra cómo los eventos del \texttt{socket} se con
 \caption{Esquema del flujo reactivo de los mensajes en el cliente (RxJS).}
 \label{fig:streams}
 \end{figure}
-
-\subsection{Recorrido completo de un mensaje}
 
 Para integrar todo lo anterior, la Figura~\ref{fig:secuencia} traza el recorrido de un mensaje desde que el Cliente~A lo envía hasta que aparece en todas las pantallas, evidenciando el carácter \textit{push}: un solo envío del Cliente~A produce una actualización en \emph{todos} los clientes.
 
@@ -494,6 +629,32 @@ Para integrar todo lo anterior, la Figura~\ref{fig:secuencia} traza el recorrido
 \subsection{Interfaz y estilos}
 
 La interfaz (\texttt{index.html} + \texttt{styles.css}) se mantiene deliberadamente sencilla, con una estética institucional inspirada en el sitio de la Facultad de Informática (paleta azul sobria, tarjetas y un encabezado claro). La pantalla se divide en una columna lateral —reloj, anuncios y lista de usuarios conectados— y una columna principal con el historial de mensajes y el cuadro de envío. El diseño es responsivo: en pantallas angostas las columnas se apilan.
+
+\subsection{Manejo de errores y desconexiones}
+\label{sec:errores}
+
+Por tratarse de un sistema distribuido, la aplicación debe prever entradas inválidas y, sobre todo, la pérdida de conexión entre nodos. Las situaciones contempladas son:
+
+\begin{itemize}[leftmargin=1.4em]
+    \item \textbf{Entradas inválidas (validación defensiva).} Tanto el nombre de registro como el texto de un mensaje se recortan y se descartan si quedan vacíos. La validación se hace en el \emph{servidor} —no solo en el cliente—, leyendo los datos de forma defensiva (se fuerza a cadena y se contempla el caso de \textit{payload} ausente) para que un mensaje mal formado no detenga el proceso.
+    \item \textbf{Mensajes de un cliente no registrado.} Si llega un evento \texttt{mensaje} de un \texttt{socket} que no figura en la tabla de usuarios, el servidor lo ignora. Así, el orden ``registrarse antes de hablar'' queda garantizado por el servidor y no depende del cliente.
+    \item \textbf{Desconexión de un cliente.} El evento \texttt{disconnect} se dispara solo (al cerrar la pestaña, perder la red o caerse el navegador). El servidor limpia la entrada del usuario en la tabla y difunde la nueva lista de conectados y un aviso de sistema, de modo que el resto de los clientes ve reflejada la baja sin intervención manual.
+    \item \textbf{Reconexión automática.} Socket.io reintenta la conexión automáticamente cuando el canal se corta. Ahora bien, como el estado vive en memoria y la reconexión genera un \texttt{socket.id} \emph{nuevo}, el usuario debe volver a registrarse: en términos del autómata (Figura~\ref{fig:automata}), una desconexión devuelve el cliente al estado \textsc{Login}.
+    \item \textbf{Caída del servidor.} Si el proceso del servidor se detiene, los clientes pierden el canal y dejan de recibir reloj, anuncios y mensajes; al volver el servidor, Socket.io reconecta y el usuario reingresa. No hay persistencia, por lo que el historial previo no se recupera (ver límites más abajo).
+\end{itemize}
+
+\subsection{Consideraciones de seguridad}
+\label{sec:seguridad}
+
+Aunque se trata de un trabajo académico, se tuvieron en cuenta algunas buenas prácticas de seguridad, y se reconocen explícitamente sus límites:
+
+\begin{itemize}[leftmargin=1.4em]
+    \item \textbf{Prevención de XSS (\textit{cross-site scripting}).} Los mensajes se insertan en el DOM mediante \texttt{textContent} y \emph{no} con \texttt{innerHTML}. De este modo, si un usuario escribe algo como \verb|<script>...</script>|, el navegador lo muestra como texto literal en lugar de interpretarlo como código, neutralizando la inyección de \textit{scripts}.
+    \item \textbf{Validación del lado del servidor.} Como se detalló, el servidor no confía en el cliente: revalida nombres y textos. Este principio (``nunca confiar en la entrada del cliente'') es la base de la seguridad en aplicaciones distribuidas.
+    \item \textbf{El servidor es la autoridad de los datos.} El autor (\texttt{usuario}) y la marca temporal (\texttt{hora}) de cada mensaje los completa el servidor a partir del \texttt{socket.id}; el cliente no puede suplantar a otro ni falsear la hora.
+    \item \textbf{No exposición de configuración sensible.} El archivo \texttt{.env} se excluye del control de versiones; solo se versiona la plantilla \texttt{.env.example}. Es la misma práctica que, en sistemas reales, evita filtrar credenciales o claves.
+    \item \textbf{Límites conocidos.} No hay \textbf{autenticación} real (cualquiera elige un nombre, incluso repetido), ni \textbf{cifrado} de aplicación: en producción correspondería servir sobre \textbf{HTTPS/WSS} para cifrar el tránsito y considerar autenticación por \textit{token}, \textit{rate limiting} para evitar abusos y validación de longitud de los mensajes.
+\end{itemize}
 
 \subsection{Límites de la solución y trabajo futuro}
 
