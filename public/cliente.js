@@ -1,182 +1,122 @@
 const socket = io();
 
-const { fromEvent, merge } = rxjs; // Importamos las funciones necesarias de RxJS
-const { map, filter } = rxjs.operators; // Importamos los operadores necesarios de RxJS
+const { fromEvent, merge } = rxjs;
+const { map, filter, scan } = rxjs.operators;
 
-// =====================
-// LOGIN
-// =====================
+const login = document.getElementById('login');
+const chat = document.getElementById('chat');
 
-const login =
-    document.getElementById('login'); // Contenedor del login
+const txtNombre = document.getElementById('txtNombre');
+const btnIngresar = document.getElementById('btnIngresar');
 
-const chat =
-    document.getElementById('chat'); // Contenedor del chat (inicialmente oculto)
+const reloj = document.getElementById('reloj');
+const anuncio = document.getElementById('anuncio');
 
-const txtNombre =
-    document.getElementById('txtNombre'); // Campo de texto para ingresar el nombre de usuario
+const txtMensaje = document.getElementById('txtMensaje');
+const btnEnviar = document.getElementById('btnEnviar');
+const listaMensajes = document.getElementById('mensajes');
+const listaUsuarios = document.getElementById('usuarios');
 
-const btnIngresar =
-    document.getElementById('btnIngresar'); // Botón para ingresar al chat
+const esEnter = (event) =>
+    event.key === 'Enter' || event.code === 'NumpadEnter';
 
-// =====================
-// RELOJ
-// =====================
+const clickIngresar$ = fromEvent(btnIngresar, 'click');
 
-const reloj =
-    document.getElementById('reloj'); // Elemento para mostrar la hora
-
-// =====================
-// CHAT
-// =====================
-
-const txtMensaje =
-    document.getElementById('txtMensaje'); // Campo de texto para ingresar mensajes
-
-const btnEnviar =
-    document.getElementById('btnEnviar'); // Botón para enviar mensajes
-
-const listaMensajes =
-    document.getElementById('mensajes'); // Lista de mensajes
-
-const listaUsuarios =
-    document.getElementById('usuarios'); // Lista de usuarios
-
-// =====================
-// INGRESO DE USUARIO
-// =====================
-
-const clickIngresar$ =
-    fromEvent(btnIngresar, 'click'); // Observable para el evento de clic en el botón de ingresar
-
-const enterNombre$ =
-    fromEvent(txtNombre, 'keydown').pipe(
-        filter(
-            (event) =>
-                event.key === 'Enter' ||
-                event.code === 'NumpadEnter'
-        )
-    ); // Observable para el evento de presionar Enter en el campo de nombre
+const enterNombre$ = fromEvent(txtNombre, 'keydown').pipe(
+    filter(esEnter)
+);
 
 merge(clickIngresar$, enterNombre$).pipe(
     map(() => txtNombre.value.trim()),
     filter((nombre) => nombre !== '')
 ).subscribe((nombre) => {
+    socket.emit('registrarUsuario', nombre);
+});
 
-    socket.emit(
-        'registrarUsuario',
-        nombre
-    ); // Emitimos el evento para registrar el usuario con el nombre ingresado
+fromEvent(socket, 'usuarioRegistrado').subscribe(() => {
+    login.style.display = 'none';
+    chat.style.display = 'block';
+    txtMensaje.focus();
+});
 
-}); // Combinamos ambos eventos (clic y Enter) para registrar al usuario de manera más intuitiva
 
-socket.on(
-    'usuarioRegistrado',
-    () => {
+fromEvent(socket, 'hora').subscribe((horaActual) => {
+    reloj.textContent = horaActual;
+});
 
-        login.style.display = 'none';
 
-        chat.style.display = 'block';
+fromEvent(socket, 'anuncio').subscribe((texto) => {
+    anuncio.textContent = texto;
+});
 
-    }
+const clickEnviar$ = fromEvent(btnEnviar, 'click');
+
+const enterMensaje$ = fromEvent(txtMensaje, 'keydown').pipe(
+    filter(esEnter)
 );
 
-// =====================
-// RELOJ
-// =====================
+merge(clickEnviar$, enterMensaje$).pipe(
+    map(() => txtMensaje.value.trim()),
+    filter((texto) => texto !== '')
+).subscribe((texto) => {
+    socket.emit('mensaje', { texto });
+    txtMensaje.value = '';
+    txtMensaje.focus();
+});
 
-socket.on(
-    'hora',
-    (horaActual) => {
 
-        reloj.textContent =
-            horaActual;
+const mensajeChat$ = fromEvent(socket, 'mensaje').pipe(
+    map((datos) => ({
+        tipo: 'usuario',
+        usuario: datos.usuario,
+        texto: datos.texto,
+        hora: datos.hora,
+    }))
+);
 
-    }
-); // Actualizamos el contenido del elemento del reloj con la hora actual recibida del servidor
+const mensajeSistema$ = fromEvent(socket, 'mensajeSistema').pipe(
+    map((texto) => ({
+        tipo: 'sistema',
+        texto,
+    }))
+);
 
-// =====================
-// MENSAJES DEL CHAT
-// =====================
 
-btnEnviar.addEventListener(
-    'click',
-    () => {
+merge(mensajeChat$, mensajeSistema$).pipe(
+    scan((historial, mensaje) => [...historial, mensaje], [])
+).subscribe((historial) => {
 
-        const texto =
-            txtMensaje.value.trim();
+    listaMensajes.innerHTML = '';
 
-        if (texto === '') {
-            return;
+    historial.forEach((mensaje) => {
+
+        const li = document.createElement('li');
+
+        if (mensaje.tipo === 'sistema') {
+            li.className = 'msg-sistema';
+            li.textContent = `[Sistema] ${mensaje.texto}`;
+        } else {
+            li.className = 'msg-usuario';
+            li.textContent =
+                `${mensaje.hora} - ${mensaje.usuario}: ${mensaje.texto}`;
         }
 
-        socket.emit(
-            'mensaje',
-            {
-                texto: texto
-            }
-        );
-
-        txtMensaje.value = '';
-
-    }
-); // Agregamos un evento de clic al botón de enviar para emitir el mensaje al servidor, asegurándonos de que el mensaje no esté vacío
-
-socket.on(
-    'mensaje',
-    (datos) => {
-
-        const li =
-            document.createElement('li');
-
-        li.textContent =
-            `${datos.usuario}: ${datos.texto}`;
-
         listaMensajes.appendChild(li);
 
-    }
-); // Escuchamos el evento de mensaje para agregar el mensaje recibido a la lista de mensajes en el chat
+    });
 
-// =====================
-// MENSAJES DEL SISTEMA
-// =====================
+    listaMensajes.scrollTop = listaMensajes.scrollHeight;
 
-socket.on(
-    'mensajeSistema',
-    (texto) => {
+});
 
-        const li =
-            document.createElement('li');
+fromEvent(socket, 'usuarios').subscribe((usuarios) => {
 
-        li.textContent =
-            `[Sistema] ${texto}`;
+    listaUsuarios.innerHTML = '';
 
-        listaMensajes.appendChild(li);
+    usuarios.forEach((usuario) => {
+        const li = document.createElement('li');
+        li.textContent = usuario;
+        listaUsuarios.appendChild(li);
+    });
 
-    }
-); // Escuchamos el evento de mensaje del sistema para agregar los mensajes del sistema a la lista de mensajes en el chat
-
-// =====================
-// LISTA DE USUARIOS
-// =====================
-
-socket.on(
-    'usuarios',
-    (usuarios) => {
-
-        listaUsuarios.innerHTML = '';
-
-        usuarios.forEach((usuario) => {
-
-            const li =
-                document.createElement('li');
-
-            li.textContent =
-                usuario;
-
-            listaUsuarios.appendChild(li);
-
-        });
-
-    }
-); // Escuchamos el evento de usuarios para actualizar la lista de usuarios conectados en el chat cada vez que se recibe una actualización del servidor
+});

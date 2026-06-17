@@ -1,0 +1,176 @@
+:root {
+    --azul: #1f4e79;
+    --azul-oscuro: #163a5a;
+    --gris-fondo: #f2f4f7;
+    --gris-borde: #d9dee5;
+    --texto: #222;
+    --sistema: #6b7280;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background: var(--gris-fondo);
+    color: var(--texto);
+}
+
+/* CABECERA */
+
+.cabecera {
+    background: var(--azul);
+    color: #fff;
+    padding: 18px 24px;
+    border-bottom: 4px solid var(--azul-oscuro);
+}
+
+.cabecera h1 {
+    margin: 0;
+    font-size: 1.4rem;
+}
+
+.subtitulo {
+    margin: 4px 0 0;
+    font-size: 0.85rem;
+    opacity: 0.9;
+}
+
+/* LAYOUT */
+
+.contenedor {
+    max-width: 960px;
+    margin: 24px auto;
+    padding: 0 16px;
+}
+
+.grilla {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 16px;
+    align-items: start;
+}
+
+.columna-lateral {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* TARJETAS */
+
+.tarjeta {
+    background: #fff;
+    border: 1px solid var(--gris-borde);
+    border-radius: 6px;
+    padding: 16px;
+}
+
+.tarjeta h2 {
+    margin: 0 0 10px;
+    font-size: 1rem;
+    color: var(--azul);
+    border-bottom: 2px solid var(--gris-borde);
+    padding-bottom: 6px;
+}
+
+.tarjeta-anuncio {
+    background: #eef3f9;
+    border-color: #c7d6e6;
+}
+
+.reloj {
+    margin: 0;
+    font-size: 1.6rem;
+    font-weight: bold;
+    color: var(--azul-oscuro);
+    text-align: center;
+}
+
+/* FORMULARIOS */
+
+.fila {
+    display: flex;
+    gap: 8px;
+}
+
+input[type="text"] {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid var(--gris-borde);
+    border-radius: 4px;
+    font-size: 0.95rem;
+}
+
+button {
+    padding: 8px 16px;
+    background: var(--azul);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.95rem;
+}
+
+button:hover {
+    background: var(--azul-oscuro);
+}
+
+/* LISTAS */
+
+.lista-usuarios {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.lista-usuarios li {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--gris-borde);
+    font-size: 0.9rem;
+}
+
+.lista-usuarios li::before {
+    content: "\25CF";
+    color: #2e8b57;
+    margin-right: 8px;
+    font-size: 0.7rem;
+    vertical-align: middle;
+}
+
+.columna-chat {
+    display: flex;
+    flex-direction: column;
+}
+
+.lista-mensajes {
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 8px;
+    height: 360px;
+    overflow-y: auto;
+    background: #fafbfc;
+    border: 1px solid var(--gris-borde);
+    border-radius: 4px;
+}
+
+.lista-mensajes li {
+    padding: 4px 2px;
+    font-size: 0.92rem;
+    line-height: 1.4;
+}
+
+.msg-sistema {
+    color: var(--sistema);
+    font-style: italic;
+}
+
+/* RESPONSIVE */
+
+@media (max-width: 720px) {
+    .grilla {
+        grid-template-columns: 1fr;
+    }
+}

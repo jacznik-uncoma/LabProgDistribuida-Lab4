@@ -1,0 +1,542 @@
+% ============================================================
+%  Comunicacion bidireccional en tiempo real (WebSocket + RxJS)
+%  Universidad Nacional del Comahue - Facultad de Informatica
+%  (mismo formato que el TP de Grid y Cloud)
+% ============================================================
+\documentclass[12pt,a4paper]{article}
+\setlength{\headheight}{13.6pt}
+
+% -- Codificacion y tipografia --------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish]{babel}
+
+% -- Margenes -------------------------------------------------
+\usepackage[top=2.5cm, bottom=2.5cm, left=2cm, right=2cm]{geometry}
+
+% -- Graficos y colores ---------------------------------------
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, backgrounds, calc}
+
+% -- Tablas ---------------------------------------------------
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{multirow}
+
+% -- Codigo fuente --------------------------------------------
+\usepackage{listings}
+\usepackage{courier}
+\usepackage{microtype}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{backcolour}{rgb}{0.97,0.97,0.97}
+\definecolor{uncblue}{RGB}{0,82,165}
+\definecolor{keywordcol}{RGB}{0,82,165}
+\definecolor{commentcol}{RGB}{0,128,0}
+\definecolor{stringcol}{RGB}{163,21,21}
+
+\lstdefinestyle{plano}{
+    backgroundcolor=\color{backcolour},
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{keywordcol}\bfseries,
+    commentstyle=\color{commentcol}\itshape,
+    stringstyle=\color{stringcol},
+    numberstyle=\tiny\color{codegray},
+    breaklines=true,
+    breakatwhitespace=false,
+    captionpos=b,
+    keepspaces=true,
+    numbers=left,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    tabsize=4,
+    frame=single,
+    rulecolor=\color{gray!40}
+}
+\lstset{style=plano}
+
+% -- Lenguaje JavaScript para listings ------------------------
+\lstdefinelanguage{JavaScript}{
+    keywords={const, let, var, function, return, if, else, for, new, require, this, => , null, true, false, undefined},
+    keywordstyle=\color{keywordcol}\bfseries,
+    ndkeywords={socket, io, emit, on, subscribe, pipe},
+    ndkeywordstyle=\color{uncblue},
+    comment=[l]{//},
+    morecomment=[s]{/*}{*/},
+    commentstyle=\color{commentcol}\itshape,
+    stringstyle=\color{stringcol},
+    morestring=[b]',
+    morestring=[b]",
+    sensitive=true
+}
+
+% -- Hipervinculos --------------------------------------------
+\usepackage[hidelinks]{hyperref}
+\usepackage{xurl}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=uncblue,
+    urlcolor=uncblue,
+    citecolor=uncblue
+}
+
+% -- Encabezado y pie de pagina -------------------------------
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small Universidad Nacional del Comahue}
+\rhead{\small Laboratorio de Programación Distribuida}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% -- Miscelanea -----------------------------------------------
+\usepackage{parskip}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{amsmath}
+\usepackage{float}
+
+% -- Formato de secciones -------------------------------------
+\usepackage{titlesec}
+\titleformat{\section}{\large\bfseries\color{uncblue}}{{\thesection.}}{0.5em}{}[\titlerule]
+\titleformat{\subsection}{\normalsize\bfseries}{{\thesubsection.}}{0.5em}{}
+
+% -- Estilos de diagramas (paleta UNC) ------------------------
+\tikzset{
+    inicio/.style={ellipse, draw=uncblue, thick, fill=blue!8,
+                   minimum width=2.6cm, minimum height=0.7cm, text centered, align=center, font=\small},
+    caja/.style={rectangle, draw=uncblue!80, thick, fill=blue!5, rounded corners,
+                 minimum width=2.6cm, minimum height=0.8cm, text centered, align=center, font=\small},
+    cajach/.style={rectangle, draw=uncblue!80, thick, fill=blue!5, rounded corners,
+                   minimum width=1.9cm, minimum height=0.75cm, text centered, align=center, font=\scriptsize},
+    decision/.style={diamond, draw=uncblue!80, thick, fill=blue!5, aspect=2,
+                     inner sep=1pt, text centered, align=center, font=\scriptsize, minimum width=2.2cm},
+    servidor/.style={rectangle, draw=uncblue, very thick, fill=blue!10, rounded corners,
+                     minimum width=3.2cm, minimum height=1.1cm, text centered, align=center, font=\small\bfseries},
+    flecha/.style={-Stealth, thick, gray!70!black},
+    flechabi/.style={Stealth-Stealth, thick, uncblue}
+}
+
+% ============================================================
+%  PORTADA
+% ============================================================
+\begin{document}
+\begin{titlepage}
+    \centering
+    \vspace*{0.5cm}
+
+    % Logos (usar los unc.jpg y fai.png del proyecto; si no estan, no rompe)
+    \IfFileExists{unc.jpg}{\includegraphics[width=2.8cm]{unc.jpg}}{}\hfill
+    \IfFileExists{fai.png}{\includegraphics[width=2.8cm]{fai.png}}{}
+
+    \vspace{0.8cm}
+    {\Large\bfseries Universidad Nacional del Comahue}\\[0.3cm]
+    {\large Facultad de Informática}\\[0.1cm]
+    {\normalsize Departamento de Ingeniería de Computadoras}
+
+    \vfill
+
+    {\Huge\bfseries Comunicación bidireccional en tiempo real}\\[0.6cm]
+    {\Large Push de datos del servidor al cliente con WebSocket (Socket.io) y Programación Reactiva (RxJS)}
+
+    \vfill
+
+    {\large Nicolás Iván Jacznik – FAI-2230}\\[0.2cm]
+    {\large Davor Kissner – FAI-3185}\\[0.6cm]
+    {\normalsize Docente: Claudio Zanellato}\\[0.2cm]
+
+    \vfill
+
+    {\large Junio 2026}
+\end{titlepage}
+
+% ============================================================
+%  INDICES
+% ============================================================
+\tableofcontents
+\newpage
+\listoffigures
+\listoftables
+\newpage
+
+% ============================================================
+%  1. INTRODUCCION
+% ============================================================
+\section{Introducción}
+
+\subsection{Tema y problema}
+
+El modelo clásico de la web es de \emph{petición--respuesta} (request--response): el navegador pide una página o un dato y el servidor responde; si la información cambia luego, el cliente no se entera hasta que vuelve a preguntar. Esto obliga a dos prácticas poco eficientes: refrescar la página manualmente o consultar al servidor de forma repetida (\textit{polling}), gastando ancho de banda y mostrando siempre datos que ya están desactualizados.
+
+El problema que aborda este trabajo es, justamente, el inverso: lograr que sea el \textbf{servidor el que ``empuje'' (push) los cambios de estado al cliente} de forma automática, sin que el usuario refresque ni la página haga sondeos constantes. Se busca un canal de \textbf{comunicación bidireccional} y persistente entre cliente y servidor sobre el cual los datos viajen en el momento en que ocurren.
+
+\begin{center}
+\texttt{CLIENTE \;$\Longleftrightarrow$\; CONEXIÓN BIDIRECCIONAL \;$\Longleftrightarrow$\; SERVIDOR}
+\end{center}
+
+Como hilo conductor, sobre ese canal se construyen tres funcionalidades de complejidad creciente: un \textbf{reloj} actualizado por el servidor, un \textbf{bloque de anuncios} rotativo y un \textbf{chat} para varios clientes.
+
+\subsection{Importancia}
+
+La comunicación en tiempo real dejó de ser un lujo para volverse la base de gran parte de las aplicaciones actuales: chats y mensajería, notificaciones, tableros (\textit{dashboards}) que se actualizan solos, juegos en línea, pizarras colaborativas y sistemas de monitoreo. En todos ellos, hacer \textit{polling} sería costoso e impreciso; el modelo \textit{push} resuelve el problema entregando el dato en el instante en que cambia.
+
+A su vez, manejar muchos flujos de eventos asincrónicos (mensajes que llegan, la hora que avanza, usuarios que entran y salen) vuelve frágil el código basado en \textit{callbacks} sueltos. Por eso cobra importancia la \textbf{programación reactiva}: permite tratar esos eventos como \emph{flujos de datos} (streams) que se transforman y combinan con operadores, dando como resultado un código más declarativo y fácil de razonar. Comprender ambas ideas —comunicación \textit{push} y programación reactiva— es valioso tanto para programar como para diseñar sistemas distribuidos modernos.
+
+\subsection{Objetivos}
+
+\begin{enumerate}[leftmargin=1.4em]
+    \item Desarrollar una aplicación con \textbf{comunicación bidireccional} cliente--servidor en la que los cambios de estado del servidor se reflejen automáticamente en el navegador, sin refrescos.
+    \item Implementar el canal en tiempo real con \textbf{WebSocket} a través de la biblioteca \textbf{Socket.io}.
+    \item Aplicar \textbf{programación reactiva} con \textbf{RxJS} en el cliente, modelando los eventos como flujos de datos (Observables) y combinándolos con operadores.
+    \item Cubrir los tres niveles propuestos por la consigna: \textit{básico} (reloj), \textit{medio} (reloj y anuncios) y \textit{avanzado} (chat para varios clientes).
+    \item Documentar la arquitectura, el flujo de datos y el protocolo de eventos de forma que el programa pueda ser continuado o corregido por otras personas.
+\end{enumerate}
+
+% ============================================================
+%  2. MARCO TEORICO
+% ============================================================
+\section{Marco teórico y tecnologías}
+
+\subsection{El problema del \textit{polling} y la solución \textit{push}}
+
+Sobre HTTP tradicional, mantener al cliente actualizado obliga a elegir entre dos caminos poco felices. Con \textit{short polling}, el navegador pregunta cada pocos segundos ``¿hay algo nuevo?''; la mayoría de las veces la respuesta es ``no'', desperdiciando peticiones, y cuando hay novedad llega con retraso. Con \textit{long polling} se simula el \textit{push} dejando la petición abierta, pero a costa de una mecánica de reconexión incómoda. La solución correcta es un canal persistente y de doble vía: \textbf{WebSocket}.
+
+\subsection{WebSocket y Socket.io}
+
+\textbf{WebSocket} es un protocolo (RFC 6455) que, partiendo de una conexión HTTP, la ``actualiza'' (\textit{upgrade}) a un canal TCP full-duplex y persistente. Una vez establecido, cliente y servidor pueden enviarse mensajes en cualquier momento, sin el costo de abrir una conexión nueva por cada intercambio.
+
+\textbf{Socket.io} es una biblioteca para Node.js (servidor) y el navegador (cliente) que se apoya en WebSocket y le agrega comodidades de uso real: reconexión automática, \textit{fallback} a otras técnicas si WebSocket no está disponible, salas (\textit{rooms}) y, sobre todo, un modelo de \textbf{eventos con nombre}. En lugar de enviar texto plano, se emiten eventos (\texttt{socket.emit('evento', datos)}) y se escuchan por su nombre (\texttt{socket.on('evento', \dots)}). El método \texttt{io.emit(\dots)} difunde un evento a \emph{todos} los clientes conectados (\textit{broadcast}), que es exactamente lo que necesita el modelo \textit{push}.
+
+\subsection{Programación reactiva y RxJS}
+
+La \textbf{programación reactiva} es un paradigma orientado a los flujos de datos asincrónicos. Su pieza central es el \textbf{Observable}: una secuencia de valores que llegan a lo largo del tiempo (clics, mensajes, ticks de reloj). A esa secuencia se la \emph{transforma} con \textbf{operadores} y, finalmente, alguien se \emph{suscribe} para reaccionar a cada valor.
+
+\textbf{RxJS} (\textit{Reactive Extensions for JavaScript}) es la implementación más difundida de este paradigma en el navegador. En este trabajo se utilizan:
+\begin{itemize}[leftmargin=1.4em]
+    \item \texttt{fromEvent}: crea un Observable a partir de una fuente de eventos (un botón del DOM o, en nuestro caso, también el \texttt{socket}).
+    \item \texttt{merge}: combina varios Observables en uno solo (por ejemplo, ``clic en Enviar'' \emph{o} ``tecla Enter'').
+    \item \texttt{map}: transforma cada valor emitido (de un evento del DOM al texto escrito).
+    \item \texttt{filter}: deja pasar solo los valores que cumplen una condición (descartar mensajes vacíos).
+    \item \texttt{scan}: acumula un estado a lo largo del tiempo, igual que un \textit{reduce} pero emitiendo el resultado en cada paso. Se usa para mantener el \textbf{historial de mensajes} como un flujo, en lugar de variables sueltas.
+\end{itemize}
+
+\subsection{Node.js y Express}
+
+El \textit{back-end} se construye sobre \textbf{Node.js}, un entorno de ejecución de JavaScript del lado del servidor, orientado a eventos y no bloqueante, lo que lo hace especialmente adecuado para mantener muchas conexiones simultáneas. \textbf{Express} es un \textit{framework} web minimalista que aquí cumple un rol acotado pero necesario: servir los archivos estáticos del cliente (el \texttt{index.html}, el \texttt{cliente.js} y los estilos) desde la carpeta \texttt{public}. El mismo servidor entrega el \textit{front-end} y atiende el canal de Socket.io, de modo que toda la aplicación corre en un único proceso y puerto.
+
+% ============================================================
+%  3. DESARROLLO
+% ============================================================
+\section{Desarrollo}
+
+\subsection{Arquitectura general}
+
+La aplicación sigue una arquitectura cliente--servidor con un único servidor central y múltiples clientes (navegadores). El servidor cumple dos funciones: entrega los archivos estáticos (HTTP, una sola vez al cargar la página) y mantiene el canal de tiempo real (WebSocket) por el que empuja los datos. La Figura~\ref{fig:arq} muestra el esquema.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=1.2cm]
+    \node[servidor] (srv) {Servidor Node.js\\\footnotesize Express + Socket.io};
+    \node[caja, left=4.2cm of srv, yshift=1.3cm] (c1) {Cliente 1\\\footnotesize Navegador + RxJS};
+    \node[caja, left=4.2cm of srv, yshift=-1.3cm] (c2) {Cliente 2\\\footnotesize Navegador + RxJS};
+
+    \draw[flechabi] (c1.east) -- node[above, font=\scriptsize, sloped]{WebSocket} (srv.north west);
+    \draw[flechabi] (c2.east) -- node[below, font=\scriptsize, sloped]{WebSocket} (srv.south west);
+
+    \node[font=\scriptsize, text=gray!60!black, align=center] at ($(c1)!0.5!(srv)+(0,0.35)$) {hora, anuncio,\\mensaje, usuarios};
+\end{tikzpicture}
+\caption{Arquitectura bidireccional: un servidor central empuja eventos a todos los clientes conectados a través de WebSocket.}
+\label{fig:arq}
+\end{figure}
+
+\subsection{Niveles implementados}
+
+La consigna plantea tres niveles de complejidad. La solución desarrollada los cubre a todos, como resume la Tabla~\ref{tab:niveles}.
+
+\begin{table}[H]
+\centering
+\caption{Niveles de la consigna y su implementación en el proyecto.}
+\label{tab:niveles}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{2.2cm} >{\raggedright\arraybackslash}p{5.5cm} >{\raggedright\arraybackslash}p{5.5cm}@{}}
+\toprule
+\textbf{Nivel} & \textbf{Consigna} & \textbf{Implementación} \\
+\midrule
+Básico & Un reloj o un bloque de anuncios actualizado por el servidor. & Reloj global: el servidor emite la hora cada segundo. \\
+Medio & Un reloj \emph{y} un bloque de anuncios. & Reloj + bloque de anuncios rotativo (cada 5~s). \\
+Avanzado & Un chat para dos clientes (o pizarra / tateti). & Chat multiusuario con lista de conectados y mensajes del sistema. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Estructura del proyecto}
+
+El proyecto se organiza en un \textit{back-end} (un único archivo) y un \textit{front-end} servido como contenido estático:
+
+\begin{itemize}[leftmargin=1.4em]
+    \item \texttt{server.js} — servidor Node.js: Express, Socket.io y la lógica de reloj, anuncios y chat.
+    \item \texttt{public/index.html} — estructura de la interfaz (login + chat).
+    \item \texttt{public/cliente.js} — lógica del cliente con RxJS.
+    \item \texttt{public/styles.css} — estilos (estética institucional UNCOMA).
+    \item \texttt{package.json} — dependencias (\texttt{express}, \texttt{socket.io}).
+\end{itemize}
+
+\subsection{Back-end: \texttt{server.js}}
+
+\subsubsection{Reloj y anuncios (push periódico)}
+
+Las dos funcionalidades más simples se resuelven con temporizadores que difunden a todos los clientes. El reloj emite la hora una vez por segundo; los anuncios rotan sobre un arreglo cada cinco segundos. El siguiente fragmento muestra el mecanismo (Listado~\ref{lst:reloj}).
+
+\begin{lstlisting}[language=JavaScript, caption={Reloj y bloque de anuncios: el servidor empuja datos por intervalos.}, label={lst:reloj}]
+// Reloj global: la hora se empuja a todos cada segundo
+setInterval(() => {
+    io.emit('hora', ahora());
+}, 1000);
+
+// Bloque de anuncios: rota sobre un arreglo cada 5 segundos
+const anuncios = [
+    'Bienvenidos al Laboratorio de Programacion Distribuida',
+    'El servidor empuja los datos al cliente (push), sin refrescar',
+    'Comunicacion bidireccional con Socket.io + RxJS',
+    'Facultad de Informatica - UNCOMA',
+];
+let indiceAnuncio = 0;
+setInterval(() => {
+    io.emit('anuncio', anuncios[indiceAnuncio]);
+    indiceAnuncio = (indiceAnuncio + 1) % anuncios.length;
+}, 5000);
+\end{lstlisting}
+
+\subsubsection{Gestión de usuarios y chat}
+
+Cada cliente, al conectarse, abre un \texttt{socket}. La aplicación mantiene un \texttt{Map} que asocia el identificador único de cada conexión (\texttt{socket.id}) con el nombre elegido. Trackear por \texttt{socket.id} —y no por nombre— evita un error sutil: si dos personas eligen el mismo nombre, al desconectarse una no se elimina la entrada equivocada. El Listado~\ref{lst:chat} resume el ciclo de vida de una conexión.
+
+\begin{lstlisting}[language=JavaScript, caption={Registro de usuario, reenvío de mensajes y desconexión.}, label={lst:chat}]
+const usuarios = new Map(); // socket.id -> nombre
+
+io.on('connection', (socket) => {
+
+    socket.on('registrarUsuario', (nombre) => {
+        const limpio = String(nombre || '').trim();
+        if (limpio === '') return;            // validacion en el servidor
+        usuarios.set(socket.id, limpio);
+        socket.emit('usuarioRegistrado');     // confirma solo a ese cliente
+        socket.emit('anuncio', anuncios[indiceAnuncio]); // anuncio actual
+        io.emit('mensajeSistema', `${limpio} se ha conectado`);
+        io.emit('usuarios', Array.from(usuarios.values()));
+    });
+
+    socket.on('mensaje', (datos) => {
+        const nombre = usuarios.get(socket.id);
+        if (!nombre) return;                  // solo usuarios registrados
+        const texto = String((datos && datos.texto) || '').trim();
+        if (texto === '') return;
+        io.emit('mensaje', { usuario: nombre, texto, hora: ahora() });
+    });
+
+    socket.on('disconnect', () => {
+        const nombre = usuarios.get(socket.id);
+        if (!nombre) return;
+        usuarios.delete(socket.id);
+        io.emit('mensajeSistema', `${nombre} se ha desconectado`);
+        io.emit('usuarios', Array.from(usuarios.values()));
+    });
+});
+\end{lstlisting}
+
+\subsubsection{Protocolo de eventos}
+
+El contrato entre cliente y servidor se reduce a un conjunto acotado de eventos con nombre. La Tabla~\ref{tab:eventos} documenta cada uno, su sentido y su contenido.
+
+\begin{table}[H]
+\centering
+\caption{Protocolo de eventos de Socket.io de la aplicación.}
+\label{tab:eventos}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}>{\ttfamily\raggedright\arraybackslash}p{3cm} >{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}p{7cm}@{}}
+\toprule
+\textbf{\normalfont Evento} & \textbf{Sentido} & \textbf{Datos / Significado} \\
+\midrule
+registrarUsuario & Cliente $\rightarrow$ Servidor & Nombre elegido; solicita el alta. \\
+usuarioRegistrado & Servidor $\rightarrow$ Cliente & Confirmación al solicitante; habilita el chat. \\
+hora & Servidor $\rightarrow$ Todos & Cadena con la hora actual (cada 1~s). \\
+anuncio & Servidor $\rightarrow$ Todos & Texto del anuncio vigente (cada 5~s). \\
+mensaje & Ambos sentidos & Cliente envía \texttt{\{texto\}}; servidor difunde \texttt{\{usuario, texto, hora\}}. \\
+mensajeSistema & Servidor $\rightarrow$ Todos & Avisos de conexión/desconexión. \\
+usuarios & Servidor $\rightarrow$ Todos & Lista actualizada de nombres conectados. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Front-end reactivo: \texttt{cliente.js}}
+
+El cliente es donde se concentra la \textbf{programación reactiva}. La idea rectora es que \emph{cada} entrada —tanto los eventos del DOM como los del \texttt{socket}— se modela como un Observable, y la interfaz se actualiza suscribiéndose a esos flujos.
+
+\subsubsection{Ingreso del usuario (combinación de flujos)}
+
+El alta puede dispararse de dos maneras: con un clic en ``Entrar'' o presionando Enter en el campo de nombre. Con RxJS, ambas fuentes se unifican en un solo flujo mediante \texttt{merge}, se extrae el nombre con \texttt{map} y se descartan los vacíos con \texttt{filter} (Listado~\ref{lst:login}). El diagrama de flujo de este proceso se muestra en la Figura~\ref{fig:flujo}.
+
+\begin{lstlisting}[language=JavaScript, caption={Ingreso del usuario combinando clic y Enter en un único flujo reactivo.}, label={lst:login}]
+const clickIngresar$ = fromEvent(btnIngresar, 'click');
+const enterNombre$   = fromEvent(txtNombre, 'keydown').pipe(filter(esEnter));
+
+merge(clickIngresar$, enterNombre$).pipe(
+    map(() => txtNombre.value.trim()),
+    filter((nombre) => nombre !== '')
+).subscribe((nombre) => {
+    socket.emit('registrarUsuario', nombre);
+});
+
+// El servidor confirma -> se muestra el chat
+fromEvent(socket, 'usuarioRegistrado').subscribe(() => {
+    login.style.display = 'none';
+    chat.style.display  = 'block';
+});
+\end{lstlisting}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.95cm and 1.4cm]
+    \node[inicio] (ini) {Inicio};
+    \node[caja, below=of ini] (ingresa) {Clic ``Entrar'' \emph{o} Enter};
+    \node[decision, below=of ingresa] (vacio) {¿Nombre\\vacío?};
+    \node[caja, below=1.4cm of vacio] (emit) {\texttt{emit('registrarUsuario')}};
+    \node[caja, below=of emit] (reg) {Servidor: \texttt{usuarios.set(id,nombre)}};
+    \node[caja, below=of reg] (conf) {Servidor: \texttt{emit('usuarioRegistrado')}};
+    \node[caja, below=of conf] (mostrar) {Oculta login, muestra chat};
+    \node[inicio, below=of mostrar] (fin) {Fin};
+
+    \draw[flecha] (ini) -- (ingresa);
+    \draw[flecha] (ingresa) -- (vacio);
+    \draw[flecha] (vacio) -- node[right, font=\scriptsize]{No} (emit);
+    \draw[flecha] (vacio.east) -- ++(2.6,0) |- node[pos=0.25, right, font=\scriptsize]{Sí (descarta)} (ingresa.east);
+    \draw[flecha] (emit) -- (reg);
+    \draw[flecha] (reg) -- (conf);
+    \draw[flecha] (conf) -- (mostrar);
+    \draw[flecha] (mostrar) -- (fin);
+\end{tikzpicture}
+\caption{Diagrama de flujo del ingreso de un usuario al chat.}
+\label{fig:flujo}
+\end{figure}
+
+\subsubsection{Recepción de mensajes como estado reactivo (\texttt{scan})}
+
+El punto más representativo del paradigma es el manejo del historial de mensajes. En lugar de ir agregando elementos al DOM con cada evento suelto, se \emph{combinan} dos flujos —mensajes de usuarios y mensajes del sistema— y se \emph{acumulan} con \texttt{scan}, que mantiene el historial completo como un único valor que se vuelve a emitir en cada mensaje nuevo (Listado~\ref{lst:scan}). La interfaz solo se suscribe a ese estado y se redibuja.
+
+\begin{lstlisting}[language=JavaScript, caption={Historial de mensajes acumulado con scan: el estado del chat es un flujo.}, label={lst:scan}]
+const mensajeChat$ = fromEvent(socket, 'mensaje').pipe(
+    map((d) => ({ tipo: 'usuario', usuario: d.usuario, texto: d.texto, hora: d.hora }))
+);
+const mensajeSistema$ = fromEvent(socket, 'mensajeSistema').pipe(
+    map((texto) => ({ tipo: 'sistema', texto }))
+);
+
+merge(mensajeChat$, mensajeSistema$).pipe(
+    scan((historial, msg) => [...historial, msg], [])
+).subscribe((historial) => {
+    listaMensajes.innerHTML = '';
+    historial.forEach((m) => { /* crea un <li> por mensaje */ });
+    listaMensajes.scrollTop = listaMensajes.scrollHeight; // auto-scroll
+});
+\end{lstlisting}
+
+\subsubsection{Esquema del flujo de datos reactivo}
+
+La Figura~\ref{fig:streams} ilustra cómo los eventos del \texttt{socket} se convierten en Observables, se combinan, se acumulan y terminan actualizando la vista.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.7cm and 1.2cm]
+    \node[cajach] (s1) {\texttt{fromEvent(socket,}\\\texttt{'mensaje')}};
+    \node[cajach, below=of s1] (s2) {\texttt{fromEvent(socket,}\\\texttt{'mensajeSistema')}};
+    \coordinate (medio) at ($(s1)!0.5!(s2)$);
+    \node[cajach, right=2cm of medio] (merge) {\texttt{merge}};
+    \node[cajach, right=of merge] (scan) {\texttt{scan}\\(acumula\\historial)};
+    \node[cajach, right=of scan] (sub) {\texttt{subscribe}\\render +\\auto-scroll};
+
+    \draw[flecha] (s1.east) -- (merge.west);
+    \draw[flecha] (s2.east) -- (merge.west);
+    \draw[flecha] (merge) -- (scan);
+    \draw[flecha] (scan) -- (sub);
+\end{tikzpicture}
+\caption{Esquema del flujo reactivo de los mensajes en el cliente (RxJS).}
+\label{fig:streams}
+\end{figure}
+
+\subsection{Recorrido completo de un mensaje}
+
+Para integrar todo lo anterior, la Figura~\ref{fig:secuencia} traza el recorrido de un mensaje desde que el Cliente~A lo envía hasta que aparece en todas las pantallas, evidenciando el carácter \textit{push}: un solo envío del Cliente~A produce una actualización en \emph{todos} los clientes.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=1.0cm and 1.6cm]
+    \node[caja] (a) {Cliente A};
+    \node[servidor, right=of a] (s) {Servidor};
+    \node[caja, right=of s] (b) {Cliente B};
+
+    \draw[flecha] (a) -- node[above, font=\scriptsize, align=center]{1. \texttt{emit('mensaje')}\\\{texto\}} (s);
+    \draw[flecha] (s) to[bend left=35] node[below, font=\scriptsize, align=center]{2. \texttt{io.emit('mensaje')}\\\{usuario,texto,hora\}} (a);
+    \draw[flecha] (s) -- node[above, font=\scriptsize, align=center]{2. \texttt{io.emit('mensaje')}\\(broadcast)} (b);
+
+    \node[cajach, below=1.4cm of a] (ra) {\texttt{scan} + render};
+    \node[cajach, below=1.4cm of b] (rb) {\texttt{scan} + render};
+    \draw[flecha] (a) -- (ra);
+    \draw[flecha] (b) -- (rb);
+\end{tikzpicture}
+\caption{Recorrido de un mensaje: el Cliente A lo emite una vez y el servidor lo difunde a todos (incluido A), que lo renderizan reactivamente.}
+\label{fig:secuencia}
+\end{figure}
+
+\subsection{Interfaz y estilos}
+
+La interfaz (\texttt{index.html} + \texttt{styles.css}) se mantiene deliberadamente sencilla, con una estética institucional inspirada en el sitio de la Facultad de Informática (paleta azul sobria, tarjetas y un encabezado claro). La pantalla se divide en una columna lateral —reloj, anuncios y lista de usuarios conectados— y una columna principal con el historial de mensajes y el cuadro de envío. El diseño es responsivo: en pantallas angostas las columnas se apilan.
+
+\subsection{Límites de la solución y trabajo futuro}
+
+La solución cumple los objetivos, pero tiene límites conocidos que conviene explicitar:
+\begin{itemize}[leftmargin=1.4em]
+    \item \textbf{Estado en memoria.} La lista de usuarios y el historial viven en variables del proceso del servidor (y en el cliente). Si el servidor se reinicia, se pierde todo; no hay persistencia en base de datos.
+    \item \textbf{Sin historial para nuevos ingresos.} Quien entra al chat no ve los mensajes anteriores a su conexión, porque el \texttt{scan} de cada cliente arranca vacío.
+    \item \textbf{Difusión global.} Todos los mensajes se envían a todos (\texttt{io.emit}); no hay salas ni canales privados.
+    \item \textbf{Sin autenticación real.} El nombre no se valida contra credenciales ni se impide la duplicación.
+    \item \textbf{Re-render completo.} Por claridad didáctica, cada mensaje nuevo vuelve a dibujar toda la lista; con muchos mensajes sería preferible agregar solo el nuevo elemento.
+\end{itemize}
+
+Como \textbf{trabajo futuro} se proponen: persistir mensajes y usuarios en una base de datos; enviar el historial reciente al conectarse; incorporar \textit{rooms} para chats separados o privados; agregar un indicador de ``escribiendo\dots'' (aprovechando \texttt{debounceTime} de RxJS); y avanzar sobre las otras variantes del nivel avanzado, como una \textbf{pizarra compartida} o un \textbf{tateti}, que encajan naturalmente en el mismo modelo \textit{push}.
+
+% ============================================================
+%  4. CONCLUSION
+% ============================================================
+\section{Conclusión}
+
+El trabajo cumplió con el objetivo central de la consigna: se construyó una aplicación con \textbf{comunicación bidireccional} en la que el servidor \emph{empuja} sus cambios de estado al navegador y estos se reflejan de inmediato, sin refrescos ni sondeos. Quedó demostrado, a través del reloj, los anuncios y el chat, que el modelo \textit{push} sobre WebSocket resuelve con elegancia un problema que el esquema clásico petición--respuesta atiende de forma deficiente.
+
+En cuanto a los niveles, la solución abarca desde el \textbf{básico} (reloj) y el \textbf{medio} (reloj y anuncios) hasta el \textbf{avanzado} (chat multiusuario con lista de conectados y avisos del sistema), lo que evidencia que una misma arquitectura de eventos escala a funcionalidades de complejidad creciente sin cambios estructurales.
+
+Respecto de la \textbf{programación reactiva}, RxJS no fue un agregado decorativo sino la forma de organizar la lógica del cliente: los eventos del DOM y del \texttt{socket} se trataron como flujos, se combinaron con \texttt{merge}, se filtraron y, sobre todo, se acumularon con \texttt{scan} para representar el estado del chat como un único flujo de datos. El resultado es un código declarativo, donde la interfaz simplemente ``reacciona'' a lo que el servidor empuja.
+
+En síntesis, la combinación de \textbf{Node.js + Socket.io} en el servidor y \textbf{RxJS} en el cliente probó ser una base sólida y de bajo costo conceptual para aplicaciones en tiempo real. Los límites identificados —persistencia, historial, salas— no contradicen lo logrado, sino que trazan un camino claro de mejoras sobre una arquitectura que ya cumple su propósito.
+
+\newpage
+% ============================================================
+%  5. BIBLIOGRAFIA
+% ============================================================
+\section{Bibliografía}
+
+\begin{enumerate}[leftmargin=1.6em]
+    \item Cátedra de Programación Distribuida. \textit{Comunicación bidireccional y WebSockets} (apunte de clase, diapositivas). Material de la materia.
+    \item OpenJS Foundation. \textit{Socket.IO Documentation}. \url{https://socket.io/docs/v4/} (consultado el 17 de junio de 2026).
+    \item ReactiveX. \textit{RxJS — Reactive Extensions Library for JavaScript}. \url{https://rxjs.dev/} (consultado el 17 de junio de 2026).
+    \item OpenJS Foundation. \textit{Node.js Documentation}. \url{https://nodejs.org/en/docs} (consultado el 17 de junio de 2026).
+    \item OpenJS Foundation. \textit{Express — Infraestructura web rápida y minimalista para Node.js}. \url{https://expressjs.com/es/} (consultado el 17 de junio de 2026).
+    \item Fette, I. \& Melnikov, A. (2011). \textit{RFC 6455: The WebSocket Protocol}. IETF. \url{https://datatracker.ietf.org/doc/html/rfc6455} (consultado el 17 de junio de 2026).
+    \item MDN Web Docs. \textit{The WebSocket API (WebSockets)}. Mozilla. \url{https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API} (consultado el 17 de junio de 2026).
+    \item Facultad de Informática, Universidad Nacional del Comahue. \textit{Sitio institucional}. \url{https://www.fi.uncoma.edu.ar/} (consultado el 17 de junio de 2026).
+    \item Anthropic. (2026). Claude [herramienta de inteligencia artificial generativa]. Utilizado como apoyo en la redacción y el armado del informe.
+\end{enumerate}
+
+\end{document}
